@@ -253,7 +253,19 @@ function setupCloudSyncModal() {
         statusEl.style.display = 'none';
       }
     }
-    modal.showModal();
+    if (typeof modal.showModal === 'function') {
+      modal.showModal();
+    } else {
+      modal.setAttribute('open', '');
+    }
+  });
+
+  // Close on backdrop click
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      if (typeof modal.close === 'function') modal.close();
+      else modal.removeAttribute('open');
+    }
   });
 
   if (genKeyBtn && keyInput) {
