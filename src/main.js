@@ -277,10 +277,6 @@ function setupCloudSyncModal() {
   if (saveBtn) {
     saveBtn.addEventListener('click', async () => {
       const syncId = keyInput?.value?.trim();
-      if (!syncId) {
-        alert('Podaj Kod Chmury!');
-        return;
-      }
       saveBtn.disabled = true;
       saveBtn.innerHTML = '<i data-lucide="loader"></i> Wysyłam...';
       const result = await store.saveToCloud(syncId);
@@ -289,9 +285,10 @@ function setupCloudSyncModal() {
       if (window.lucide) window.lucide.createIcons();
 
       if (result.success) {
+        if (keyInput) keyInput.value = result.syncId;
         if (statusEl) {
           statusEl.style.display = 'block';
-          statusEl.textContent = `Zapisano w chmurze! (${result.lastSynced})`;
+          statusEl.innerHTML = `✅ Zapisano w chmurze! (${result.lastSynced})<br><small style="opacity:0.8;word-break:break-all;">Kod Chmury: <strong>${result.syncId}</strong></small>`;
         }
       } else {
         alert('Wystąpił błąd podczas wysyłania do chmury. Sprawdź połączenie internetowe.');

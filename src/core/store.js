@@ -524,38 +524,36 @@ class Store {
 
   async saveToCloud(customSyncId = null) {
     const config = this.getCloudSyncConfig();
-    const syncId = customSyncId || config.syncId || generateId();
-    let recordId = config.recordId;
+    let syncId = (customSyncId || config.syncId || '').trim();
 
     try {
-      const payload = {
-        name: `lifeos_${syncId}`,
-        data: this._state
-      };
-
       let res;
-      if (recordId) {
-        res = await fetch(`https://api.restful-api.dev/objects/${recordId}`, {
+      if (syncId && syncId.length > 20) {
+        res = await fetch(`https://jsonblob.com/api/jsonBlob/${syncId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(this._state)
         });
       }
 
       if (!res || !res.ok) {
-        res = await fetch('https://api.restful-api.dev/objects', {
+        res = await fetch('https://jsonblob.com/api/jsonBlob', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(this._state)
         });
+
+        if (res.ok) {
+          const headerId = res.headers.get('x-jsonblob-id');
+          const location = res.headers.get('location') || '';
+          syncId = headerId || location.split('/').pop();
+        }
       }
 
-      if (res.ok) {
-        const result = await res.json();
-        recordId = result.id;
+      if (syncId && (res.ok || res.status === 200 || res.status === 201)) {
         const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
-        this.setCloudSyncConfig({ syncId, recordId, lastSynced: nowStr });
-        return { success: true, syncId, recordId, lastSynced: nowStr };
+        this.setCloudSyncConfig({ syncId, lastSynced: nowStr });
+        return { success: true, syncId, lastSynced: nowStr };
       }
     } catch (e) {
       console.error('LifeOS: Cloud save error', e);
@@ -563,23 +561,18 @@ class Store {
     return { success: false };
   }
 
-  async loadFromCloud(targetId) {
-    if (!targetId) return false;
-    const cleanId = targetId.trim();
+  async loadFromCloud(syncIdInput) {
+    if (!syncIdInput) return false;
+    const cleanId = syncIdInput.trim();
 
     try {
-      let res = await fetch(`https://api.restful-api.dev/objects/${cleanId}`);
-      if (!res.ok) {
-        res = await fetch(`https://api.restful-api.dev/objects?id=${cleanId}`);
-      }
-
+      const res = await fetch(`https://jsonblob.com/api/jsonBlob/${cleanId}`);
       if (res.ok) {
         const data = await res.json();
-        const record = Array.isArray(data) ? data[0] : data;
-        if (record && record.data) {
-          this._state = this._deepMerge(getDefaultState(), record.data);
+        if (data && typeof data === 'object') {
+          this._state = this._deepMerge(getDefaultState(), data);
           const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
-          this.setCloudSyncConfig({ syncId: cleanId, recordId: record.id || cleanId, lastSynced: nowStr });
+          this.setCloudSyncConfig({ syncId: cleanId, lastSynced: nowStr });
           this._notify();
           return true;
         }
