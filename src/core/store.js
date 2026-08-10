@@ -249,8 +249,19 @@ class Store {
 
   _notify() {
     this._saveState();
+    this._triggerAutoCloudSave();
     for (const cb of this._subscribers) {
       try { cb(this._state); } catch (e) { console.error('Store subscriber error:', e); }
+    }
+  }
+
+  _triggerAutoCloudSave() {
+    const config = this.getCloudSyncConfig();
+    if (config && config.syncId && config.autoSync !== false) {
+      if (this._autoSaveTimer) clearTimeout(this._autoSaveTimer);
+      this._autoSaveTimer = setTimeout(() => {
+        this.saveToCloud();
+      }, 1500);
     }
   }
 
