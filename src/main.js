@@ -2,6 +2,11 @@
    LifeOS — Application Entry Point
    ============================================================ */
 
+import './styles/variables.css';
+import './styles/base.css';
+import './styles/components.css';
+import './styles/views.css';
+
 import router from './core/router.js';
 import store from './core/store.js';
 import { initSidebar } from './components/sidebar.js';
