@@ -84,6 +84,9 @@ function init() {
   // Setup Backup Export / Import
   setupBackupHandlers();
 
+  // Setup Cloud Sync Modal
+  setupCloudSyncModal();
+
   // Start router
   router.start();
 
@@ -223,6 +226,93 @@ function setupBackupHandlers() {
       };
       reader.readAsText(file);
       e.target.value = '';
+    });
+  }
+}
+
+// ---- Cloud Sync Modal Handler ----
+function setupCloudSyncModal() {
+  const cloudSyncBtn = $('#cloud-sync-btn');
+  const modal = $('#cloud-sync-modal');
+  const keyInput = $('#cloud-sync-key-input');
+  const genKeyBtn = $('#cloud-gen-key-btn');
+  const saveBtn = $('#cloud-save-btn');
+  const loadBtn = $('#cloud-load-btn');
+  const statusEl = $('#cloud-sync-status');
+
+  if (!cloudSyncBtn || !modal) return;
+
+  cloudSyncBtn.addEventListener('click', () => {
+    const config = store.getCloudSyncConfig();
+    if (keyInput) keyInput.value = config.syncId || 'lech2026';
+    if (statusEl) {
+      if (config.lastSynced) {
+        statusEl.style.display = 'block';
+        statusEl.textContent = `Ostatnia synchronizacja: ${config.lastSynced}`;
+      } else {
+        statusEl.style.display = 'none';
+      }
+    }
+    modal.showModal();
+  });
+
+  if (genKeyBtn && keyInput) {
+    genKeyBtn.addEventListener('click', () => {
+      keyInput.value = 'lifeos-' + Math.random().toString(36).substring(2, 8);
+    });
+  }
+
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async () => {
+      const syncId = keyInput?.value?.trim();
+      if (!syncId) {
+        alert('Podaj Kod Chmury!');
+        return;
+      }
+      saveBtn.disabled = true;
+      saveBtn.innerHTML = '<i data-lucide="loader"></i> Wysyłam...';
+      const result = await store.saveToCloud(syncId);
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = '<i data-lucide="cloud-upload"></i> Wyślij do chmury';
+      if (window.lucide) window.lucide.createIcons();
+
+      if (result.success) {
+        if (statusEl) {
+          statusEl.style.display = 'block';
+          statusEl.textContent = `Zapisano w chmurze! (${result.lastSynced})`;
+        }
+      } else {
+        alert('Wystąpił błąd podczas wysyłania do chmury. Sprawdź połączenie internetowe.');
+      }
+    });
+  }
+
+  if (loadBtn) {
+    loadBtn.addEventListener('click', async () => {
+      const syncId = keyInput?.value?.trim();
+      if (!syncId) {
+        alert('Podaj Kod Chmury!');
+        return;
+      }
+      loadBtn.disabled = true;
+      loadBtn.innerHTML = '<i data-lucide="loader"></i> Pobieram...';
+      const success = await store.loadFromCloud(syncId);
+      loadBtn.disabled = false;
+      loadBtn.innerHTML = '<i data-lucide="cloud-download"></i> Pobierz z chmury';
+      if (window.lucide) window.lucide.createIcons();
+
+      if (success) {
+        modal.close();
+        alert('Pomyślnie pobrano dane z chmury!');
+        const currentRoute = router.getCurrentRoute();
+        const route = router._routes?.get(currentRoute);
+        const viewContainer = $('#view-container');
+        if (route && viewContainer) {
+          route.render(viewContainer);
+        }
+      } else {
+        alert(`Nie znaleziono danych dla Kodu Chmury: "${syncId}". Upewnij się, że wpisałeś ten sam kod co na pierwszym urządzeniu.`);
+      }
     });
   }
 }

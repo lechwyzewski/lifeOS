@@ -53,6 +53,10 @@
         </button>
         <div class="topbar-title" id="topbar-title">Dashboard</div>
         <div class="topbar-actions" style="display:flex;gap:var(--space-2);align-items:center;">
+          <button id="cloud-sync-btn" class="btn btn-ghost btn-sm" title="Synchronizuj dane w chmurze bez przesyłania plików" aria-label="Synchronizacja chmury">
+            <i data-lucide="cloud"></i>
+            <span class="btn-label">Chmura</span>
+          </button>
           <button id="export-btn" class="btn btn-ghost btn-sm" title="Pobierz kopię zapasową (JSON)" aria-label="Eksportuj dane">
             <i data-lucide="download"></i>
             <span class="btn-label">Kopia JSON</span>
@@ -120,6 +124,43 @@
           <button type="submit" class="btn btn-primary">Dodaj zadanie</button>
         </div>
       </form>
+    </div>
+  <!-- Cloud Sync Modal -->
+  <dialog id="cloud-sync-modal" class="modal">
+    <div class="modal-content glass-card">
+      <div class="modal-header">
+        <h2 style="display:flex;align-items:center;gap:0.5rem;"><i data-lucide="cloud"></i> Synchronizacja w chmurze</h2>
+        <button class="modal-close" aria-label="Zamknij" onclick="document.getElementById('cloud-sync-modal').close()">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:1rem;">
+        <p style="font-size:0.9rem;opacity:0.8;margin:0;">
+          Użyj tego samego <strong>Kodu Chmury</strong> na komputerze i telefonie, aby przesyłać swoje dane bez ręcznych plików!
+        </p>
+
+        <div class="form-group">
+          <label for="cloud-sync-key-input">Twój Kod Chmury (Sync ID)</label>
+          <div style="display:flex;gap:0.5rem;">
+            <input type="text" id="cloud-sync-key-input" class="form-control" placeholder="np. lech2026" style="flex:1;" />
+            <button type="button" id="cloud-gen-key-btn" class="btn btn-ghost" title="Wygeneruj losowy kod">
+              <i data-lucide="sparkles"></i>
+            </button>
+          </div>
+          <small style="opacity:0.6;display:block;margin-top:0.25rem;">Wpisz własne słowo lub kliknij różdżkę. Użyj tego samego kodu na innych urządzeniach.</small>
+        </div>
+
+        <div id="cloud-sync-status" class="badge badge-info" style="display:none;padding:0.5rem;text-align:center;"></div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-top:0.5rem;">
+          <button type="button" id="cloud-save-btn" class="btn btn-primary" style="display:flex;justify-content:center;align-items:center;gap:0.5rem;">
+            <i data-lucide="cloud-upload"></i> Wyślij do chmury
+          </button>
+          <button type="button" id="cloud-load-btn" class="btn btn-ghost" style="border:1px solid var(--glass-border);display:flex;justify-content:center;align-items:center;gap:0.5rem;">
+            <i data-lucide="cloud-download"></i> Pobierz z chmury
+          </button>
+        </div>
+      </div>
     </div>
   </dialog>
 

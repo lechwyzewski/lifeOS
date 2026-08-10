@@ -507,6 +507,89 @@ class Store {
     return null;
   }
 
+  // ---- Cloud Sync ----
+
+  getCloudSyncConfig() {
+    return this._state.settings.cloudSync || { syncId: '', recordId: '', autoSync: false, lastSynced: null };
+  }
+
+  setCloudSyncConfig(config) {
+    if (!this._state.settings) this._state.settings = {};
+    this._state.settings.cloudSync = {
+      ...this.getCloudSyncConfig(),
+      ...config
+    };
+    this._notify();
+  }
+
+  async saveToCloud(customSyncId = null) {
+    const config = this.getCloudSyncConfig();
+    const syncId = customSyncId || config.syncId || generateId();
+    let recordId = config.recordId;
+
+    try {
+      const payload = {
+        name: `lifeos_${syncId}`,
+        data: this._state
+      };
+
+      let res;
+      if (recordId) {
+        res = await fetch(`https://api.restful-api.dev/objects/${recordId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      if (!res || !res.ok) {
+        res = await fetch('https://api.restful-api.dev/objects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      if (res.ok) {
+        const result = await res.json();
+        recordId = result.id;
+        const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+        this.setCloudSyncConfig({ syncId, recordId, lastSynced: nowStr });
+        return { success: true, syncId, recordId, lastSynced: nowStr };
+      }
+    } catch (e) {
+      console.error('LifeOS: Cloud save error', e);
+    }
+    return { success: false };
+  }
+
+  async loadFromCloud(targetId) {
+    if (!targetId) return false;
+    const cleanId = targetId.trim();
+
+    try {
+      let res = await fetch(`https://api.restful-api.dev/objects/${cleanId}`);
+      if (!res.ok) {
+        res = await fetch(`https://api.restful-api.dev/objects?id=${cleanId}`);
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        const record = Array.isArray(data) ? data[0] : data;
+        if (record && record.data) {
+          this._state = this._deepMerge(getDefaultState(), record.data);
+          const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+          this.setCloudSyncConfig({ syncId: cleanId, recordId: record.id || cleanId, lastSynced: nowStr });
+          this._notify();
+          return true;
+        }
+      }
+    } catch (e) {
+      console.error('LifeOS: Cloud load error', e);
+    }
+    return false;
+  }
+
   // ---- Backup & Export / Import ----
 
   exportJSON() {
