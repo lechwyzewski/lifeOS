@@ -507,6 +507,35 @@ class Store {
     return null;
   }
 
+  // ---- Backup & Export / Import ----
+
+  exportJSON() {
+    const jsonStr = JSON.stringify(this._state, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `lifeos_backup_${todayISO()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  importJSON(jsonString) {
+    try {
+      const parsed = JSON.parse(jsonString);
+      if (parsed && typeof parsed === 'object') {
+        this._state = this._deepMerge(getDefaultState(), parsed);
+        this._notify();
+        return true;
+      }
+    } catch (e) {
+      console.error('LifeOS: Failed to import JSON state', e);
+    }
+    return false;
+  }
+
   // ---- Reset ----
   resetToDefaults() {
     this._state = getDefaultState();

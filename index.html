@@ -52,7 +52,16 @@
           <i data-lucide="menu"></i>
         </button>
         <div class="topbar-title" id="topbar-title">Dashboard</div>
-        <div class="topbar-actions">
+        <div class="topbar-actions" style="display:flex;gap:var(--space-2);align-items:center;">
+          <button id="export-btn" class="btn btn-ghost btn-sm" title="Pobierz kopię zapasową (JSON)" aria-label="Eksportuj dane">
+            <i data-lucide="download"></i>
+            <span class="btn-label">Kopia JSON</span>
+          </button>
+          <button id="import-btn" class="btn btn-ghost btn-sm" title="Wczytaj kopię z pliku JSON" aria-label="Importuj dane">
+            <i data-lucide="upload"></i>
+            <span class="btn-label">Wczytaj</span>
+          </button>
+          <input type="file" id="import-file-input" accept=".json" style="display:none;" />
           <button id="quick-add-btn" class="btn btn-primary btn-sm" aria-label="Dodaj zadanie">
             <i data-lucide="plus"></i>
             <span class="btn-label">Nowe zadanie</span>

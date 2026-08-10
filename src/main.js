@@ -81,6 +81,9 @@ function init() {
   // Setup Quick Add modal
   setupQuickAddModal();
 
+  // Setup Backup Export / Import
+  setupBackupHandlers();
+
   // Start router
   router.start();
 
@@ -178,6 +181,48 @@ function setupQuickAddModal() {
   if (modal) {
     modal.addEventListener('click', (e) => {
       if (e.target === modal) modal.close();
+    });
+  }
+}
+
+// ---- Backup Export / Import Handlers ----
+function setupBackupHandlers() {
+  const exportBtn = $('#export-btn');
+  const importBtn = $('#import-btn');
+  const importFileInput = $('#import-file-input');
+
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      store.exportJSON();
+    });
+  }
+
+  if (importBtn && importFileInput) {
+    importBtn.addEventListener('click', () => {
+      importFileInput.click();
+    });
+
+    importFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const success = store.importJSON(event.target.result);
+        if (success) {
+          alert('Dane zostały pomyślnie zaimportowane!');
+          const currentRoute = router.getCurrentRoute();
+          const route = router._routes?.get(currentRoute);
+          const viewContainer = $('#view-container');
+          if (route && viewContainer) {
+            route.render(viewContainer);
+          }
+        } else {
+          alert('Błąd podczas odczytu pliku JSON. Upewnij się, że to poprawny plik kopii zapasowej.');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
     });
   }
 }
