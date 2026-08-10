@@ -3,6 +3,7 @@ import utils from '../core/utils.js';
 
 let unsubscribe = null;
 let currentContainer = null;
+let editingTaskId = null;
 
 export function render(container) {
   currentContainer = container;
@@ -32,6 +33,53 @@ function renderHTML(container) {
       <div class="eisenhower-stats" style="margin-top: 2rem;">
         ${renderStatsBar()}
       </div>
+
+      <!-- Edit Task Dialog -->
+      <dialog id="edit-task-modal" class="modal">
+        <div class="modal-content glass-card">
+          <div class="modal-header">
+            <h2>Edytuj zadanie</h2>
+            <button class="modal-close" id="edit-modal-close" aria-label="Zamknij">
+              <i data-lucide="x"></i>
+            </button>
+          </div>
+          <form id="edit-task-form" class="modal-body">
+            <input type="hidden" id="edit-task-id" />
+            <div class="form-group">
+              <label for="edit-task-title">Tytuł zadania</label>
+              <input type="text" id="edit-task-title" class="form-control" required />
+            </div>
+            <div class="form-group">
+              <label for="edit-task-quadrant">Kwadrant Eisenhowera</label>
+              <select id="edit-task-quadrant" class="form-control">
+                <option value="1">Q1 — Ważne i Pilne</option>
+                <option value="2">Q2 — Ważne i Niepilne</option>
+                <option value="3">Q3 — Nieważne i Pilne</option>
+                <option value="4">Q4 — Nieważne i Niepilne</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="edit-task-due">Termin</label>
+                <input type="date" id="edit-task-due" class="form-control" />
+              </div>
+              <div class="form-group">
+                <label for="edit-task-pomodoros">Pomodoro (est.)</label>
+                <input type="number" id="edit-task-pomodoros" class="form-control" min="1" max="20" />
+              </div>
+            </div>
+            <div class="modal-actions" style="display:flex;justify-content:space-between;align-items:center;">
+              <button type="button" id="edit-task-delete-btn" class="btn btn-danger btn-sm">
+                <i data-lucide="trash-2"></i> Usuń zadanie
+              </button>
+              <div style="display:flex;gap:0.5rem;">
+                <button type="button" id="edit-task-cancel-btn" class="btn btn-ghost">Anuluj</button>
+                <button type="submit" class="btn btn-primary">Zapisz zmiany</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </dialog>
     </div>
   `;
 
@@ -63,12 +111,17 @@ function renderQuadrant(q) {
       
       <div class="quadrant-tasks" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
         ${tasks.length ? tasks.map(t => `
-          <div class="task-item glass-card" draggable="true" id="task-item-${t.id}" data-id="${t.id}" style="padding: 0.75rem; cursor: grab; display: flex; justify-content: space-between; align-items: center;">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div class="task-item glass-card" draggable="true" id="task-item-${t.id}" data-id="${t.id}" style="padding: 0.75rem; cursor: grab; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 0;">
               <input type="checkbox" id="task-checkbox-${t.id}" class="task-checkbox" data-id="${t.id}" ${t.done ? 'checked' : ''}>
-              <label for="task-checkbox-${t.id}" style="${t.done ? 'text-decoration: line-through; opacity: 0.7;' : ''} cursor: pointer;">${t.title}</label>
+              <label for="task-checkbox-${t.id}" class="task-label-title" data-id="${t.id}" style="${t.done ? 'text-decoration: line-through; opacity: 0.7;' : ''} cursor: pointer; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex: 1;" title="Kliknij dwukrotnie lub ikona ołówka aby edytować">${t.title}</label>
             </div>
-            ${t.pomodoros ? `<span class="badge badge-info"><i data-lucide="clock" style="width: 12px; height: 12px;"></i> ${t.pomodoros}</span>` : ''}
+            <div style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0;">
+              ${t.pomodoros ? `<span class="badge badge-info" style="font-size: 0.75rem;"><i data-lucide="clock" style="width: 12px; height: 12px;"></i> ${t.pomodoros}</span>` : ''}
+              <button type="button" class="edit-task-btn btn-icon" data-id="${t.id}" title="Edytuj zadanie" style="background: none; border: none; cursor: pointer; color: var(--text-tertiary, #888); padding: 2px 4px; transition: color 0.2s;">
+                <i data-lucide="pencil" style="width: 14px; height: 14px;"></i>
+              </button>
+            </div>
           </div>
         `).join('') : '<div class="empty-state" style="padding: 1rem; text-align: center; color: var(--text-muted);">Brak zadań</div>'}
       </div>
@@ -127,6 +180,93 @@ function attachEvents(container) {
     });
   });
 
+  // Edit Task Buttons & Double Click
+  const modal = utils.$('#edit-task-modal', container);
+  const form = utils.$('#edit-task-form', container);
+  const closeBtn = utils.$('#edit-modal-close', container);
+  const cancelBtn = utils.$('#edit-task-cancel-btn', container);
+  const deleteBtn = utils.$('#edit-task-delete-btn', container);
+
+  const openEditModal = (taskId) => {
+    const task = store.getState().tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    editingTaskId = taskId;
+    utils.$('#edit-task-id', container).value = task.id;
+    utils.$('#edit-task-title', container).value = task.title;
+    utils.$('#edit-task-quadrant', container).value = task.quadrant || 2;
+    utils.$('#edit-task-due', container).value = task.dueDate || '';
+    utils.$('#edit-task-pomodoros', container).value = task.pomodoros || 1;
+
+    if (typeof modal.showModal === 'function') {
+      modal.showModal();
+    } else {
+      modal.setAttribute('open', '');
+    }
+  };
+
+  const closeEditModal = () => {
+    if (typeof modal.close === 'function') {
+      modal.close();
+    } else {
+      modal.removeAttribute('open');
+    }
+    editingTaskId = null;
+  };
+
+  utils.$$('.edit-task-btn', container).forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEditModal(btn.getAttribute('data-id'));
+    });
+  });
+
+  utils.$$('.task-label-title', container).forEach(lbl => {
+    lbl.addEventListener('dblclick', () => {
+      openEditModal(lbl.getAttribute('data-id'));
+    });
+  });
+
+  if (closeBtn) closeBtn.addEventListener('click', closeEditModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeEditModal);
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeEditModal();
+    });
+  }
+
+  if (form) {
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = utils.$('#edit-task-id', container).value;
+      const title = utils.$('#edit-task-title', container).value.trim();
+      const quadrant = parseInt(utils.$('#edit-task-quadrant', container).value, 10);
+      const dueDate = utils.$('#edit-task-due', container).value || null;
+      const pomodoros = parseInt(utils.$('#edit-task-pomodoros', container).value || '1', 10);
+
+      if (id && title) {
+        store.updateTask(id, {
+          title,
+          quadrant,
+          dueDate,
+          pomodoros
+        });
+      }
+      closeEditModal();
+    });
+  }
+
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', () => {
+      const id = utils.$('#edit-task-id', container).value;
+      if (id && confirm('Czy na pewno chcesz usunąć to zadanie?')) {
+        store.deleteTask(id);
+        closeEditModal();
+      }
+    });
+  }
+
   // Drag & Drop
   const taskItems = utils.$$('.task-item', container);
   taskItems.forEach(item => {
@@ -134,7 +274,7 @@ function attachEvents(container) {
       e.dataTransfer.setData('text/plain', item.getAttribute('data-id'));
       item.style.opacity = '0.5';
     });
-    item.addEventListener('dragend', (e) => {
+    item.addEventListener('dragend', () => {
       item.style.opacity = '1';
     });
   });
@@ -144,12 +284,11 @@ function attachEvents(container) {
     zone.addEventListener('dragover', (e) => {
       e.preventDefault();
       zone.classList.add('drag-over');
-      // Add a slight visual cue manually in case drag-over class isn't doing enough
       zone.style.transform = 'scale(1.02)';
       zone.style.transition = 'transform 0.2s';
     });
     
-    zone.addEventListener('dragleave', (e) => {
+    zone.addEventListener('dragleave', () => {
       zone.classList.remove('drag-over');
       zone.style.transform = 'scale(1)';
     });
@@ -163,7 +302,6 @@ function attachEvents(container) {
       const newQ = parseInt(zone.getAttribute('data-quadrant'), 10);
       
       if (taskId && newQ) {
-        // Find current task to make sure we only update if changed
         const tasks = store.getState().tasks;
         const task = tasks.find(t => t.id === taskId);
         if (task && task.quadrant !== newQ) {
