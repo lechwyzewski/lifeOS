@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="LifeOS — Twój system planowania życia i rozwoju osobistego. Odkryj swoje powołanie, planuj cele i realizuj zadania." />
+  <meta name="theme-color" content="#0a0a0f" />
+  <title>LifeOS — System Planowania i Rozwoju</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js" defer></script>
+
+  <!-- App Styles -->
+  <link rel="stylesheet" href="/src/styles/variables.css" />
+  <link rel="stylesheet" href="/src/styles/base.css" />
+  <link rel="stylesheet" href="/src/styles/components.css" />
+  <link rel="stylesheet" href="/src/styles/views.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <div class="logo-icon">
+            <i data-lucide="orbit" class="logo-svg"></i>
+          </div>
+          <span class="logo-text">LifeOS</span>
+        </div>
+        <button id="sidebar-close" class="sidebar-close" aria-label="Zamknij menu">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav" id="sidebar-nav">
+        <!-- Filled by sidebar.js -->
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-version">v1.0 — Faza 1</div>
+      </div>
+    </aside>
+
+    <!-- Mobile Overlay -->
+    <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+    <!-- Main Content -->
+    <main id="main-content" class="main-content">
+      <!-- Top Bar -->
+      <header class="topbar">
+        <button id="menu-toggle" class="menu-toggle" aria-label="Otwórz menu">
+          <i data-lucide="menu"></i>
+        </button>
+        <div class="topbar-title" id="topbar-title">Dashboard</div>
+        <div class="topbar-actions">
+          <button id="quick-add-btn" class="btn btn-primary btn-sm" aria-label="Dodaj zadanie">
+            <i data-lucide="plus"></i>
+            <span class="btn-label">Nowe zadanie</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- View Container -->
+      <div id="view-container" class="view-container">
+        <!-- Views are rendered here by the router -->
+      </div>
+    </main>
+  </div>
+
+  <!-- Quick Add Task Modal -->
+  <dialog id="quick-add-modal" class="modal">
+    <div class="modal-content glass-card">
+      <div class="modal-header">
+        <h2>Nowe zadanie</h2>
+        <button class="modal-close" aria-label="Zamknij">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <form id="quick-add-form" class="modal-body">
+        <div class="form-group">
+          <label for="task-title-input">Tytuł zadania</label>
+          <input type="text" id="task-title-input" class="form-control" placeholder="Co chcesz zrobić?" required />
+        </div>
+        <div class="form-group">
+          <label for="task-quadrant-input">Kwadrant Eisenhowera</label>
+          <select id="task-quadrant-input" class="form-control">
+            <option value="1">Q1 — Ważne i Pilne</option>
+            <option value="2" selected>Q2 — Ważne i Niepilne</option>
+            <option value="3">Q3 — Nieważne i Pilne</option>
+            <option value="4">Q4 — Nieważne i Niepilne</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="task-due-input">Termin</label>
+            <input type="date" id="task-due-input" class="form-control" />
+          </div>
+          <div class="form-group">
+            <label for="task-pomodoros-input">Pomodoro (est.)</label>
+            <input type="number" id="task-pomodoros-input" class="form-control" min="1" max="20" value="1" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="task-goal-input">Powiązany cel</label>
+          <select id="task-goal-input" class="form-control">
+            <option value="">— Brak —</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" onclick="document.getElementById('quick-add-modal').close()">Anuluj</button>
+          <button type="submit" class="btn btn-primary">Dodaj zadanie</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- App Entry Point -->
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
