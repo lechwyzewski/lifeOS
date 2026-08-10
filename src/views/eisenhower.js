@@ -68,14 +68,9 @@ function renderHTML(container) {
                 <input type="number" id="edit-task-pomodoros" class="form-control" min="1" max="20" />
               </div>
             </div>
-            <div class="modal-actions" style="display:flex;justify-content:space-between;align-items:center;">
-              <button type="button" id="edit-task-delete-btn" class="btn btn-danger btn-sm">
-                <i data-lucide="trash-2"></i> Usuń zadanie
-              </button>
-              <div style="display:flex;gap:0.5rem;">
-                <button type="button" id="edit-task-cancel-btn" class="btn btn-ghost">Anuluj</button>
-                <button type="submit" class="btn btn-primary">Zapisz zmiany</button>
-              </div>
+            <div class="modal-actions" style="display:flex;justify-content:flex-end;gap:0.5rem;align-items:center;">
+              <button type="button" id="edit-task-cancel-btn" class="btn btn-ghost">Anuluj</button>
+              <button type="submit" class="btn btn-primary">Zapisz zmiany</button>
             </div>
           </form>
         </div>
@@ -92,7 +87,12 @@ function renderHTML(container) {
 
 function renderQuadrant(q) {
   const info = utils.getQuadrantInfo(q);
-  const tasks = store.getTasksByQuadrant(q);
+  const allTasks = (store.getState().tasks || []).filter(t => t.quadrant === q);
+  
+  // Sort: active tasks on top, completed (done) tasks at the bottom
+  const activeTasks = allTasks.filter(t => !t.done);
+  const completedTasks = allTasks.filter(t => t.done);
+  const sortedTasks = [...activeTasks, ...completedTasks];
   
   return `
     <div class="glass-card eisenhower-quadrant q${q} drop-zone" data-quadrant="${q}" style="display: flex; flex-direction: column; border-top: 4px solid ${info.color};">
@@ -105,22 +105,28 @@ function renderQuadrant(q) {
         </div>
         <div style="text-align: right;">
           <span class="badge" style="background-color: ${info.color}; color: #fff;">${info.action}</span>
-          <div style="font-size: 0.8rem; margin-top: 0.25rem;">Zadań: ${tasks.length}</div>
+          <div style="font-size: 0.8rem; margin-top: 0.25rem;">Do zrobienia: ${activeTasks.length} ${completedTasks.length > 0 ? `<span style="opacity:0.6;">(✓ ${completedTasks.length})</span>` : ''}</div>
         </div>
       </div>
       
       <div class="quadrant-tasks" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem;">
-        ${tasks.length ? tasks.map(t => `
-          <div class="task-item glass-card" draggable="true" id="task-item-${t.id}" data-id="${t.id}" style="padding: 0.75rem; cursor: grab; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;">
+        ${sortedTasks.length ? sortedTasks.map(t => `
+          <div class="task-item glass-card ${t.done ? 'task-done' : ''}" draggable="true" id="task-item-${t.id}" data-id="${t.id}" style="padding: 0.75rem; cursor: grab; display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; ${t.done ? 'opacity: 0.65; background: rgba(255,255,255,0.03);' : ''}">
             <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 0;">
-              <input type="checkbox" id="task-checkbox-${t.id}" class="task-checkbox" data-id="${t.id}" ${t.done ? 'checked' : ''}>
-              <label for="task-checkbox-${t.id}" class="task-label-title" data-id="${t.id}" style="${t.done ? 'text-decoration: line-through; opacity: 0.7;' : ''} cursor: pointer; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex: 1;" title="Kliknij dwukrotnie lub ikona ołówka aby edytować">${t.title}</label>
+              <input type="checkbox" id="task-checkbox-${t.id}" class="task-checkbox" data-id="${t.id}" ${t.done ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;">
+              <label for="task-checkbox-${t.id}" class="task-label-title" data-id="${t.id}" style="${t.done ? 'text-decoration: line-through; opacity: 0.8;' : ''} cursor: pointer; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; flex: 1;" title="${t.done ? 'Zadanie ukończone (kliknij checkbox aby przywrócić)' : 'Kliknij ikona ołówka aby edytować'}">${t.title}</label>
             </div>
             <div style="display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0;">
-              ${t.pomodoros ? `<span class="badge badge-info" style="font-size: 0.75rem;"><i data-lucide="clock" style="width: 12px; height: 12px;"></i> ${t.pomodoros}</span>` : ''}
-              <button type="button" class="edit-task-btn btn-icon" data-id="${t.id}" title="Edytuj zadanie" style="background: none; border: none; cursor: pointer; color: var(--text-tertiary, #888); padding: 2px 4px; transition: color 0.2s;">
-                <i data-lucide="pencil" style="width: 14px; height: 14px;"></i>
-              </button>
+              ${!t.done && t.pomodoros ? `<span class="badge badge-info" style="font-size: 0.75rem;"><i data-lucide="clock" style="width: 12px; height: 12px;"></i> ${t.pomodoros}</span>` : ''}
+              ${t.done ? `
+                <button type="button" class="delete-task-direct-btn btn-icon" data-id="${t.id}" title="Usuń trwale z macierzy" style="background: none; border: none; cursor: pointer; color: var(--danger-color, #ef4444); padding: 2px 4px; transition: transform 0.2s;">
+                  <i data-lucide="trash-2" style="width: 15px; height: 15px;"></i>
+                </button>
+              ` : `
+                <button type="button" class="edit-task-btn btn-icon" data-id="${t.id}" title="Edytuj zadanie" style="background: none; border: none; cursor: pointer; color: var(--text-tertiary, #888); padding: 2px 4px; transition: color 0.2s;">
+                  <i data-lucide="pencil" style="width: 14px; height: 14px;"></i>
+                </button>
+              `}
             </div>
           </div>
         `).join('') : '<div class="empty-state" style="padding: 1rem; text-align: center; color: var(--text-muted);">Brak zadań</div>'}
@@ -134,10 +140,11 @@ function renderQuadrant(q) {
 }
 
 function renderStatsBar() {
-  const counts = [1, 2, 3, 4].map(q => store.getTasksByQuadrant(q).length);
+  const allTasks = store.getState().tasks || [];
+  const counts = [1, 2, 3, 4].map(q => allTasks.filter(t => t.quadrant === q && !t.done).length);
   const total = counts.reduce((sum, c) => sum + c, 0);
   
-  if (total === 0) return '<div class="empty-state">Brak zadań w macierzy</div>';
+  if (total === 0) return '<div class="empty-state">Brak aktywnych zadań w macierzy</div>';
   
   const segments = counts.map((c, i) => {
     const q = i + 1;
@@ -149,8 +156,8 @@ function renderStatsBar() {
   return `
     <div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.9rem;">
-        <span>Rozkład zadań</span>
-        <span>Razem: ${total}</span>
+        <span>Rozkład aktywnych zadań</span>
+        <span>Do zrobienia: ${total}</span>
       </div>
       <div style="height: 12px; border-radius: 6px; overflow: hidden; display: flex; background: var(--bg-card);">
         ${segments}
@@ -180,12 +187,23 @@ function attachEvents(container) {
     });
   });
 
-  // Edit Task Buttons & Double Click
+  // Direct Delete button for completed tasks
+  const deleteDirectBtns = utils.$$('.delete-task-direct-btn', container);
+  deleteDirectBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      if (id && confirm('Czy na pewno chcesz trwale usunąć to ukończone zadanie?')) {
+        store.deleteTask(id);
+      }
+    });
+  });
+
+  // Edit Task Modal Handlers
   const modal = utils.$('#edit-task-modal', container);
   const form = utils.$('#edit-task-form', container);
   const closeBtn = utils.$('#edit-modal-close', container);
   const cancelBtn = utils.$('#edit-task-cancel-btn', container);
-  const deleteBtn = utils.$('#edit-task-delete-btn', container);
 
   const openEditModal = (taskId) => {
     const task = store.getState().tasks.find(t => t.id === taskId);
@@ -223,7 +241,11 @@ function attachEvents(container) {
 
   utils.$$('.task-label-title', container).forEach(lbl => {
     lbl.addEventListener('dblclick', () => {
-      openEditModal(lbl.getAttribute('data-id'));
+      const id = lbl.getAttribute('data-id');
+      const task = store.getState().tasks.find(t => t.id === id);
+      if (task && !task.done) {
+        openEditModal(id);
+      }
     });
   });
 
@@ -254,16 +276,6 @@ function attachEvents(container) {
         });
       }
       closeEditModal();
-    });
-  }
-
-  if (deleteBtn) {
-    deleteBtn.addEventListener('click', () => {
-      const id = utils.$('#edit-task-id', container).value;
-      if (id && confirm('Czy na pewno chcesz usunąć to zadanie?')) {
-        store.deleteTask(id);
-        closeEditModal();
-      }
     });
   }
 
