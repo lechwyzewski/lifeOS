@@ -535,38 +535,37 @@ class Store {
 
   async saveToCloud(customSyncId = null) {
     const config = this.getCloudSyncConfig();
-    let syncId = (customSyncId || config.syncId || '').trim();
-    let recordId = config.recordId || null;
+    let targetId = (customSyncId || config.recordId || config.syncId || '').trim();
 
     // Save local state first to prevent any loss
     this._saveState();
 
     try {
       let res;
-      // Only PUT if we already have an established recordId
-      if (recordId) {
-        res = await fetch(`https://api.restful-api.dev/objects/${recordId}`, {
+      // 1. If targetId exists, try PUT to update the cloud object directly
+      if (targetId) {
+        res = await fetch(`https://api.restful-api.dev/objects/${targetId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: syncId || 'lifeos-sync', data: this._state })
+          body: JSON.stringify({ name: targetId, data: this._state })
         });
       }
 
-      // If no recordId or PUT returned 404, POST to create a new object
+      // 2. If no targetId or PUT returned 404, POST to create a new cloud object
       if (!res || !res.ok) {
         res = await fetch('https://api.restful-api.dev/objects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: syncId || 'lifeos-sync', data: this._state })
+          body: JSON.stringify({ name: targetId || 'lifeos-sync', data: this._state })
         });
       }
 
       if (res && res.ok) {
         const data = await res.json();
-        const activeRecordId = data.id || recordId;
+        const finalId = data.id || targetId;
         const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
-        this.setCloudSyncConfig({ syncId: activeRecordId, recordId: activeRecordId, lastSynced: nowStr });
-        return { success: true, syncId: activeRecordId, lastSynced: nowStr };
+        this.setCloudSyncConfig({ syncId: finalId, recordId: finalId, lastSynced: nowStr });
+        return { success: true, syncId: finalId, lastSynced: nowStr };
       }
     } catch (e) {
       console.error('LifeOS: Cloud save error', e);
