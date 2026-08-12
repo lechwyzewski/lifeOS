@@ -538,65 +538,38 @@ class Store {
     let syncId = (customSyncId || config.syncId || '').trim();
     let recordId = config.recordId || null;
 
-    if (!syncId) {
-      syncId = 'lifeos-' + Math.random().toString(36).substring(2, 10);
-    }
-
     // Save local state first to prevent any loss
     this._saveState();
 
-    // Provider 1: api.restful-api.dev (Unlimited size, full CORS, REST object API)
     try {
       let res;
-      // If we already have a recordId or if customSyncId looks like an object ID
-      const targetId = recordId || (syncId.length > 20 ? syncId : null);
-      if (targetId) {
-        res = await fetch(`https://api.restful-api.dev/objects/${targetId}`, {
+      // Only PUT if we already have an established recordId
+      if (recordId) {
+        res = await fetch(`https://api.restful-api.dev/objects/${recordId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: syncId, data: this._state })
+          body: JSON.stringify({ name: syncId || 'lifeos-sync', data: this._state })
         });
       }
 
+      // If no recordId or PUT returned 404, POST to create a new object
       if (!res || !res.ok) {
         res = await fetch('https://api.restful-api.dev/objects', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: syncId, data: this._state })
+          body: JSON.stringify({ name: syncId || 'lifeos-sync', data: this._state })
         });
       }
 
       if (res && res.ok) {
         const data = await res.json();
-        const activeRecordId = data.id || targetId || syncId;
-        const finalSyncId = activeRecordId;
+        const activeRecordId = data.id || recordId;
         const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
-        this.setCloudSyncConfig({ syncId: finalSyncId, recordId: activeRecordId, lastSynced: nowStr });
-        return { success: true, syncId: finalSyncId, lastSynced: nowStr };
+        this.setCloudSyncConfig({ syncId: activeRecordId, recordId: activeRecordId, lastSynced: nowStr });
+        return { success: true, syncId: activeRecordId, lastSynced: nowStr };
       }
     } catch (e) {
-      console.warn('LifeOS: Provider 1 (restful-api.dev) save failed', e);
-    }
-
-    // Provider 2: api.keyval.org
-    try {
-      const payloadStr = JSON.stringify(this._state);
-      const res = await fetch('https://api.keyval.org/set', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: syncId, val: payloadStr })
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.status === 'SUCCESS') {
-          const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
-          this.setCloudSyncConfig({ syncId, lastSynced: nowStr });
-          return { success: true, syncId, lastSynced: nowStr };
-        }
-      }
-    } catch (e) {
-      console.warn('LifeOS: Provider 2 (keyval.org) save failed', e);
+      console.error('LifeOS: Cloud save error', e);
     }
 
     return { success: false };
