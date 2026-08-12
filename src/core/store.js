@@ -536,14 +536,51 @@ class Store {
   async saveToCloud(customSyncId = null) {
     const config = this.getCloudSyncConfig();
     let syncId = (customSyncId || config.syncId || '').trim();
+    let recordId = config.recordId || null;
+
     if (!syncId) {
       syncId = 'lifeos-' + Math.random().toString(36).substring(2, 10);
     }
 
-    const payloadStr = JSON.stringify(this._state);
+    // Save local state first to prevent any loss
+    this._saveState();
 
+    // Provider 1: api.restful-api.dev (Unlimited size, full CORS, REST object API)
     try {
-      // Primary cloud backend: api.keyval.org
+      let res;
+      // If we already have a recordId or if customSyncId looks like an object ID
+      const targetId = recordId || (syncId.length > 20 ? syncId : null);
+      if (targetId) {
+        res = await fetch(`https://api.restful-api.dev/objects/${targetId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: syncId, data: this._state })
+        });
+      }
+
+      if (!res || !res.ok) {
+        res = await fetch('https://api.restful-api.dev/objects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: syncId, data: this._state })
+        });
+      }
+
+      if (res && res.ok) {
+        const data = await res.json();
+        const activeRecordId = data.id || targetId || syncId;
+        const finalSyncId = activeRecordId;
+        const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+        this.setCloudSyncConfig({ syncId: finalSyncId, recordId: activeRecordId, lastSynced: nowStr });
+        return { success: true, syncId: finalSyncId, lastSynced: nowStr };
+      }
+    } catch (e) {
+      console.warn('LifeOS: Provider 1 (restful-api.dev) save failed', e);
+    }
+
+    // Provider 2: api.keyval.org
+    try {
+      const payloadStr = JSON.stringify(this._state);
       const res = await fetch('https://api.keyval.org/set', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -559,41 +596,7 @@ class Store {
         }
       }
     } catch (e) {
-      console.warn('LifeOS: keyval.org save failed, trying fallback', e);
-    }
-
-    // Fallback: jsonblob.com
-    try {
-      let resFallback;
-      if (syncId && syncId.length > 20) {
-        resFallback = await fetch(`https://jsonblob.com/api/jsonBlob/${syncId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: payloadStr
-        });
-      }
-
-      if (!resFallback || !resFallback.ok) {
-        resFallback = await fetch('https://jsonblob.com/api/jsonBlob', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payloadStr
-        });
-
-        if (resFallback.ok) {
-          const headerId = resFallback.headers.get('x-jsonblob-id');
-          const location = resFallback.headers.get('location') || '';
-          syncId = headerId || location.split('/').pop();
-        }
-      }
-
-      if (syncId && resFallback && resFallback.ok) {
-        const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
-        this.setCloudSyncConfig({ syncId, lastSynced: nowStr });
-        return { success: true, syncId, lastSynced: nowStr };
-      }
-    } catch (e) {
-      console.error('LifeOS: Cloud save error', e);
+      console.warn('LifeOS: Provider 2 (keyval.org) save failed', e);
     }
 
     return { success: false };
@@ -603,7 +606,32 @@ class Store {
     if (!syncIdInput) return false;
     const cleanId = syncIdInput.trim();
 
-    // 1. Try keyval.org primary
+    // Backup current local state before loading from cloud
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('lifeos_pre_cloud_backup', JSON.stringify(this._state));
+      }
+    } catch (e) {}
+
+    // Provider 1: api.restful-api.dev
+    try {
+      const res = await fetch(`https://api.restful-api.dev/objects/${encodeURIComponent(cleanId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.data && typeof data.data === 'object') {
+          this._state = this._deepMerge(getDefaultState(), data.data);
+          const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+          this.setCloudSyncConfig({ syncId: cleanId, recordId: cleanId, lastSynced: nowStr });
+          this._saveState();
+          this._notify();
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn('LifeOS: Provider 1 (restful-api.dev) load failed', e);
+    }
+
+    // Provider 2: api.keyval.org
     try {
       const res = await fetch(`https://api.keyval.org/get/${encodeURIComponent(cleanId)}`);
       if (res.ok) {
@@ -614,16 +642,17 @@ class Store {
             this._state = this._deepMerge(getDefaultState(), parsed);
             const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
             this.setCloudSyncConfig({ syncId: cleanId, lastSynced: nowStr });
+            this._saveState();
             this._notify();
             return true;
           }
         }
       }
     } catch (e) {
-      console.warn('LifeOS: keyval.org load failed, trying legacy fallback', e);
+      console.warn('LifeOS: Provider 2 (keyval.org) load failed', e);
     }
 
-    // 2. Try jsonblob legacy fallback
+    // Provider 3: jsonblob legacy fallback
     try {
       const res = await fetch(`https://jsonblob.com/api/jsonBlob/${encodeURIComponent(cleanId)}`);
       if (res.ok) {
@@ -632,12 +661,13 @@ class Store {
           this._state = this._deepMerge(getDefaultState(), data);
           const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
           this.setCloudSyncConfig({ syncId: cleanId, lastSynced: nowStr });
+          this._saveState();
           this._notify();
           return true;
         }
       }
     } catch (e) {
-      console.error('LifeOS: Cloud load error', e);
+      console.warn('LifeOS: Provider 3 (jsonblob) load failed', e);
     }
 
     return false;
