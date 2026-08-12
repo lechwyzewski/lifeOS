@@ -293,7 +293,7 @@ function setupCloudSyncModal() {
           statusEl.innerHTML = `✅ Zapisano w chmurze! (${result.lastSynced})<br><small style="opacity:0.8;word-break:break-all;">Kod Chmury: <strong>${result.syncId}</strong></small>`;
         }
       } else {
-        alert('Wystąpił błąd podczas wysyłania do chmury. Sprawdź połączenie internetowe.');
+        alert(result.error ? `Wystąpił błąd podczas wysyłania do chmury:\n${result.error}` : 'Wystąpił błąd podczas wysyłania do chmury. Sprawdź połączenie internetowe.');
       }
     });
   }

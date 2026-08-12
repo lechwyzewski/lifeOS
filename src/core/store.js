@@ -540,13 +540,20 @@ class Store {
     // Save local state first to prevent any loss
     this._saveState();
 
+    let lastError = null;
+
+    // Provider 1: api.restful-api.dev
     try {
       let res;
       // 1. If targetId exists, try PUT to update the cloud object directly
       if (targetId) {
-        res = await fetch(`https://api.restful-api.dev/objects/${targetId}`, {
+        res = await fetch(`https://api.restful-api.dev/objects/${encodeURIComponent(targetId)}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
           body: JSON.stringify({ name: targetId, data: this._state })
         });
       }
@@ -555,7 +562,11 @@ class Store {
       if (!res || !res.ok) {
         res = await fetch('https://api.restful-api.dev/objects', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
           body: JSON.stringify({ name: targetId || 'lifeos-sync', data: this._state })
         });
       }
@@ -566,12 +577,15 @@ class Store {
         const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
         this.setCloudSyncConfig({ syncId: finalId, recordId: finalId, lastSynced: nowStr });
         return { success: true, syncId: finalId, lastSynced: nowStr };
+      } else if (res) {
+        lastError = `Serwer zwrócił kod: ${res.status} ${res.statusText}`;
       }
     } catch (e) {
       console.error('LifeOS: Cloud save error', e);
+      lastError = e?.message || 'Błąd sieci lub połączenia internetowego.';
     }
 
-    return { success: false };
+    return { success: false, error: lastError };
   }
 
   _isValidState(data) {
