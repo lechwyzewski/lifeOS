@@ -602,6 +602,10 @@ class Store {
     return { success: false };
   }
 
+  _isValidState(data) {
+    return Boolean(data && typeof data === 'object' && (Array.isArray(data.tasks) || Array.isArray(data.goals) || Boolean(data.dailyFocus) || Boolean(data.eisenhower)));
+  }
+
   async loadFromCloud(syncIdInput) {
     if (!syncIdInput) return false;
     const cleanId = syncIdInput.trim();
@@ -618,7 +622,7 @@ class Store {
       const res = await fetch(`https://api.restful-api.dev/objects/${encodeURIComponent(cleanId)}`);
       if (res.ok) {
         const data = await res.json();
-        if (data && data.data && typeof data.data === 'object') {
+        if (data && data.data && this._isValidState(data.data)) {
           this._state = this._deepMerge(getDefaultState(), data.data);
           const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
           this.setCloudSyncConfig({ syncId: cleanId, recordId: cleanId, lastSynced: nowStr });
@@ -638,7 +642,7 @@ class Store {
         const data = await res.json();
         if (data && data.status === 'SUCCESS' && data.val) {
           const parsed = JSON.parse(data.val);
-          if (parsed && typeof parsed === 'object') {
+          if (parsed && this._isValidState(parsed)) {
             this._state = this._deepMerge(getDefaultState(), parsed);
             const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
             this.setCloudSyncConfig({ syncId: cleanId, lastSynced: nowStr });
@@ -657,7 +661,7 @@ class Store {
       const res = await fetch(`https://jsonblob.com/api/jsonBlob/${encodeURIComponent(cleanId)}`);
       if (res.ok) {
         const data = await res.json();
-        if (data && typeof data === 'object') {
+        if (data && this._isValidState(data)) {
           this._state = this._deepMerge(getDefaultState(), data);
           const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
           this.setCloudSyncConfig({ syncId: cleanId, lastSynced: nowStr });

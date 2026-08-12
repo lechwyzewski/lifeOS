@@ -87,19 +87,7 @@ function init() {
   // Setup Cloud Sync Modal
   setupCloudSyncModal();
 
-  // Auto-fetch latest cloud state on load if paired with a Kod Chmury
-  const cloudConfig = store.getCloudSyncConfig();
-  if (cloudConfig && cloudConfig.syncId) {
-    store.loadFromCloud(cloudConfig.syncId).then(success => {
-      if (success) {
-        const currentRoute = router.getCurrentRoute();
-        const route = router._routes?.get(currentRoute);
-        if (route && viewContainer) {
-          route.render(viewContainer);
-        }
-      }
-    });
-  }
+  // LocalStorage is the primary source of truth. Cloud load is triggered on user action in modal.
 
   // Start router
   router.start();
