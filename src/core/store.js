@@ -536,32 +536,58 @@ class Store {
   async saveToCloud(customSyncId = null) {
     const config = this.getCloudSyncConfig();
     let syncId = (customSyncId || config.syncId || '').trim();
+    if (!syncId) {
+      syncId = 'lifeos-' + Math.random().toString(36).substring(2, 10);
+    }
+
+    const payloadStr = JSON.stringify(this._state);
 
     try {
-      let res;
+      // Primary cloud backend: api.keyval.org
+      const res = await fetch('https://api.keyval.org/set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: syncId, val: payloadStr })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.status === 'SUCCESS') {
+          const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+          this.setCloudSyncConfig({ syncId, lastSynced: nowStr });
+          return { success: true, syncId, lastSynced: nowStr };
+        }
+      }
+    } catch (e) {
+      console.warn('LifeOS: keyval.org save failed, trying fallback', e);
+    }
+
+    // Fallback: jsonblob.com
+    try {
+      let resFallback;
       if (syncId && syncId.length > 20) {
-        res = await fetch(`https://jsonblob.com/api/jsonBlob/${syncId}`, {
+        resFallback = await fetch(`https://jsonblob.com/api/jsonBlob/${syncId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this._state)
+          body: payloadStr
         });
       }
 
-      if (!res || !res.ok) {
-        res = await fetch('https://jsonblob.com/api/jsonBlob', {
+      if (!resFallback || !resFallback.ok) {
+        resFallback = await fetch('https://jsonblob.com/api/jsonBlob', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this._state)
+          body: payloadStr
         });
 
-        if (res.ok) {
-          const headerId = res.headers.get('x-jsonblob-id');
-          const location = res.headers.get('location') || '';
+        if (resFallback.ok) {
+          const headerId = resFallback.headers.get('x-jsonblob-id');
+          const location = resFallback.headers.get('location') || '';
           syncId = headerId || location.split('/').pop();
         }
       }
 
-      if (syncId && (res.ok || res.status === 200 || res.status === 201)) {
+      if (syncId && resFallback && resFallback.ok) {
         const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
         this.setCloudSyncConfig({ syncId, lastSynced: nowStr });
         return { success: true, syncId, lastSynced: nowStr };
@@ -569,6 +595,7 @@ class Store {
     } catch (e) {
       console.error('LifeOS: Cloud save error', e);
     }
+
     return { success: false };
   }
 
@@ -576,8 +603,29 @@ class Store {
     if (!syncIdInput) return false;
     const cleanId = syncIdInput.trim();
 
+    // 1. Try keyval.org primary
     try {
-      const res = await fetch(`https://jsonblob.com/api/jsonBlob/${cleanId}`);
+      const res = await fetch(`https://api.keyval.org/get/${encodeURIComponent(cleanId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.status === 'SUCCESS' && data.val) {
+          const parsed = JSON.parse(data.val);
+          if (parsed && typeof parsed === 'object') {
+            this._state = this._deepMerge(getDefaultState(), parsed);
+            const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+            this.setCloudSyncConfig({ syncId: cleanId, lastSynced: nowStr });
+            this._notify();
+            return true;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('LifeOS: keyval.org load failed, trying legacy fallback', e);
+    }
+
+    // 2. Try jsonblob legacy fallback
+    try {
+      const res = await fetch(`https://jsonblob.com/api/jsonBlob/${encodeURIComponent(cleanId)}`);
       if (res.ok) {
         const data = await res.json();
         if (data && typeof data === 'object') {
@@ -591,6 +639,7 @@ class Store {
     } catch (e) {
       console.error('LifeOS: Cloud load error', e);
     }
+
     return false;
   }
 
