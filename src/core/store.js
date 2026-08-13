@@ -541,6 +541,7 @@ class Store {
     this._saveState();
 
     let lastError = null;
+    const payloadStr = JSON.stringify(this._state);
 
     // Provider 1: api.restful-api.dev
     try {
@@ -554,11 +555,11 @@ class Store {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
-          body: JSON.stringify({ name: targetId, data: this._state })
+          body: JSON.stringify({ name: targetId, data: { json: payloadStr } })
         });
       }
 
-      // 2. If no targetId or PUT returned 404, POST to create a new cloud object
+      // 2. If no targetId or PUT returned 404/500, POST to create a new cloud object
       if (!res || !res.ok) {
         res = await fetch('https://api.restful-api.dev/objects', {
           method: 'POST',
@@ -567,7 +568,7 @@ class Store {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
           },
-          body: JSON.stringify({ name: targetId || 'lifeos-sync', data: this._state })
+          body: JSON.stringify({ name: targetId || 'lifeos-sync', data: { json: payloadStr } })
         });
       }
 
@@ -578,10 +579,31 @@ class Store {
         this.setCloudSyncConfig({ syncId: finalId, recordId: finalId, lastSynced: nowStr });
         return { success: true, syncId: finalId, lastSynced: nowStr };
       } else if (res) {
-        lastError = `Serwer zwrócił kod: ${res.status} ${res.statusText}`;
+        console.warn('LifeOS: restful-api.dev returned status:', res.status);
       }
     } catch (e) {
-      console.error('LifeOS: Cloud save error', e);
+      console.warn('LifeOS: restful-api.dev failed:', e);
+    }
+
+    // Provider 2: paste.rs (Bulletproof fallback for payload sizes > 2KB)
+    try {
+      const pasteRes = await fetch('https://paste.rs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: payloadStr
+      });
+
+      if (pasteRes && pasteRes.ok) {
+        const rawUrl = (await pasteRes.text()).trim();
+        const newSyncId = rawUrl.replace('https://paste.rs/', '').replace('/', '');
+        const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+        this.setCloudSyncConfig({ syncId: newSyncId, recordId: newSyncId, lastSynced: nowStr });
+        return { success: true, syncId: newSyncId, lastSynced: nowStr };
+      } else if (pasteRes) {
+        lastError = `Serwer zwrócił kod: ${pasteRes.status}`;
+      }
+    } catch (e) {
+      console.error('LifeOS: paste.rs fallback error:', e);
       lastError = e?.message || 'Błąd sieci lub połączenia internetowego.';
     }
 
@@ -589,7 +611,7 @@ class Store {
   }
 
   _isValidState(data) {
-    return Boolean(data && typeof data === 'object' && (Array.isArray(data.tasks) || Array.isArray(data.goals) || Boolean(data.dailyFocus) || Boolean(data.eisenhower)));
+    return Boolean(data && typeof data === 'object' && (Array.isArray(data.tasks) || Array.isArray(data.goals) || Boolean(data.dailyFocus) || Boolean(data.eisenhower) || Boolean(data.wheelOfLife)));
   }
 
   async loadFromCloud(syncIdInput) {
@@ -603,13 +625,15 @@ class Store {
       }
     } catch (e) {}
 
-    // Provider 1: api.restful-api.dev
+    // Provider 1: paste.rs
     try {
-      const res = await fetch(`https://api.restful-api.dev/objects/${encodeURIComponent(cleanId)}`);
+      const res = await fetch(`https://paste.rs/${encodeURIComponent(cleanId)}`);
       if (res.ok) {
-        const data = await res.json();
-        if (data && data.data && this._isValidState(data.data)) {
-          this._state = this._deepMerge(getDefaultState(), data.data);
+        const text = await res.text();
+        let parsed = null;
+        try { parsed = JSON.parse(text); } catch (e) {}
+        if (parsed && this._isValidState(parsed)) {
+          this._state = this._deepMerge(getDefaultState(), parsed);
           const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
           this.setCloudSyncConfig({ syncId: cleanId, recordId: cleanId, lastSynced: nowStr });
           this._saveState();
@@ -618,28 +642,29 @@ class Store {
         }
       }
     } catch (e) {
-      console.warn('LifeOS: Provider 1 (restful-api.dev) load failed', e);
+      console.warn('LifeOS: Provider 1 (paste.rs) load failed', e);
     }
 
-    // Provider 2: api.keyval.org
+    // Provider 2: api.restful-api.dev
     try {
-      const res = await fetch(`https://api.keyval.org/get/${encodeURIComponent(cleanId)}`);
+      const res = await fetch(`https://api.restful-api.dev/objects/${encodeURIComponent(cleanId)}`);
       if (res.ok) {
         const data = await res.json();
-        if (data && data.status === 'SUCCESS' && data.val) {
-          const parsed = JSON.parse(data.val);
-          if (parsed && this._isValidState(parsed)) {
-            this._state = this._deepMerge(getDefaultState(), parsed);
-            const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
-            this.setCloudSyncConfig({ syncId: cleanId, lastSynced: nowStr });
-            this._saveState();
-            this._notify();
-            return true;
-          }
+        let stateData = data.data;
+        if (stateData && typeof stateData.json === 'string') {
+          try { stateData = JSON.parse(stateData.json); } catch (e) {}
+        }
+        if (stateData && this._isValidState(stateData)) {
+          this._state = this._deepMerge(getDefaultState(), stateData);
+          const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+          this.setCloudSyncConfig({ syncId: cleanId, recordId: cleanId, lastSynced: nowStr });
+          this._saveState();
+          this._notify();
+          return true;
         }
       }
     } catch (e) {
-      console.warn('LifeOS: Provider 2 (keyval.org) load failed', e);
+      console.warn('LifeOS: Provider 2 (restful-api.dev) load failed', e);
     }
 
     // Provider 3: jsonblob legacy fallback
