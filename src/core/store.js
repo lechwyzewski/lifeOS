@@ -3,6 +3,7 @@
    ============================================================ */
 
 import { generateId, todayISO } from './utils.js';
+import { gdriveService } from './gdrive.js';
 
 const STORAGE_KEY = 'lifeos_data';
 
@@ -846,6 +847,38 @@ class Store {
   async hasConfiguredFolderFile() {
     const handle = await getStoredHandle('gdrive_file');
     return Boolean(handle);
+  }
+
+  // ---- Direct Google Drive API Integration ----
+  async saveToGoogleDriveAPI() {
+    this._saveState();
+    try {
+      const res = await gdriveService.save(this._state);
+      const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+      this.setCloudSyncConfig({ lastSynced: nowStr });
+      return { success: true, fileId: res.fileId, lastSynced: nowStr };
+    } catch (e) {
+      console.error('LifeOS: Google Drive API save error', e);
+      return { success: false, error: e.message };
+    }
+  }
+
+  async loadFromGoogleDriveAPI() {
+    try {
+      const data = await gdriveService.load();
+      if (data && this._isValidState(data)) {
+        this._state = this._deepMerge(getDefaultState(), data);
+        const nowStr = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+        this.setCloudSyncConfig({ lastSynced: nowStr });
+        this._saveState();
+        this._notify();
+        return { success: true, lastSynced: nowStr };
+      }
+      return { success: false, error: 'Nieprawidłowy plik danych' };
+    } catch (e) {
+      console.error('LifeOS: Google Drive API load error', e);
+      return { success: false, error: e.message };
+    }
   }
 
   // ---- Reset ----

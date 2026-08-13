@@ -270,9 +270,51 @@ function setupCloudSyncModal() {
     }
   });
 
+  const gdriveApiSaveBtn = $('#gdrive-api-save-btn');
+  const gdriveApiLoadBtn = $('#gdrive-api-load-btn');
   const folderSaveBtn = $('#cloud-folder-save-btn');
   const folderLoadBtn = $('#cloud-folder-load-btn');
   const folderRelinkBtn = $('#cloud-folder-relink-btn');
+
+  if (gdriveApiSaveBtn) {
+    gdriveApiSaveBtn.addEventListener('click', async () => {
+      gdriveApiSaveBtn.disabled = true;
+      gdriveApiSaveBtn.innerHTML = '<i data-lucide="loader"></i> Łączę z Google Drive...';
+      const res = await store.saveToGoogleDriveAPI();
+      gdriveApiSaveBtn.disabled = false;
+      gdriveApiSaveBtn.innerHTML = '<i data-lucide="cloud-upload"></i> Wyślij do Google Drive';
+      if (window.lucide) window.lucide.createIcons();
+
+      if (res.success) {
+        alert(`✅ Zapisano bezpośrednio na Twoim koncie Google Drive! (${res.lastSynced})`);
+      } else {
+        alert(`Wystąpił błąd zapisu Google Drive API:\n${res.error || 'Nieznany błąd'}`);
+      }
+    });
+  }
+
+  if (gdriveApiLoadBtn) {
+    gdriveApiLoadBtn.addEventListener('click', async () => {
+      gdriveApiLoadBtn.disabled = true;
+      gdriveApiLoadBtn.innerHTML = '<i data-lucide="loader"></i> Pobieram z Google Drive...';
+      const res = await store.loadFromGoogleDriveAPI();
+      gdriveApiLoadBtn.disabled = false;
+      gdriveApiLoadBtn.innerHTML = '<i data-lucide="cloud-download"></i> Pobierz z Google Drive';
+      if (window.lucide) window.lucide.createIcons();
+
+      if (res.success) {
+        alert(`✅ Pomyślnie pobrano najnowsze dane z Twojego Google Drive! (${res.lastSynced})`);
+        const currentRoute = router.getCurrentRoute();
+        const route = router._routes?.get(currentRoute);
+        const viewContainer = $('#view-container');
+        if (route && viewContainer) {
+          route.render(viewContainer);
+        }
+      } else {
+        alert(`Wystąpił błąd odczytu z Google Drive API:\n${res.error || 'Nieznany błąd'}`);
+      }
+    });
+  }
 
   if (folderSaveBtn) {
     folderSaveBtn.addEventListener('click', async () => {
