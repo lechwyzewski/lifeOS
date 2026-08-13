@@ -6,6 +6,48 @@ import { generateId, todayISO } from './utils.js';
 
 const STORAGE_KEY = 'lifeos_data';
 
+// IndexedDB Handle Storage for Automatic Google Drive File Sync
+const HANDLE_DB_NAME = 'lifeos_file_handles';
+const HANDLE_STORE_NAME = 'handles';
+
+function openHandleDB() {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') return reject('No IndexedDB');
+    const req = indexedDB.open(HANDLE_DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(HANDLE_STORE_NAME);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getStoredHandle(key = 'gdrive_file') {
+  try {
+    const db = await openHandleDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(HANDLE_STORE_NAME, 'readonly');
+      const req = tx.objectStore(HANDLE_STORE_NAME).get(key);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
+async function saveStoredHandle(handle, key = 'gdrive_file') {
+  try {
+    const db = await openHandleDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(HANDLE_STORE_NAME, 'readwrite');
+      tx.objectStore(HANDLE_STORE_NAME).put(handle, key);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch (e) {
+    return false;
+  }
+}
+
 // ---- Default State ----
 function getDefaultState() {
   return {
@@ -717,41 +759,78 @@ class Store {
     return false;
   }
 
-  async saveToFolder() {
+  async saveToFolder(forcePicker = false) {
     const jsonStr = JSON.stringify(this._state, null, 2);
     if ('showSaveFilePicker' in window) {
       try {
-        const handle = await window.showSaveFilePicker({
-          suggestedName: `lifeos_backup_${todayISO()}.json`,
-          types: [{
-            description: 'Kopia zapasowa LifeOS (JSON)',
-            accept: { 'application/json': ['.json'] }
-          }]
-        });
+        let handle = forcePicker ? null : await getStoredHandle('gdrive_file');
+
+        if (handle) {
+          try {
+            let perm = typeof handle.queryPermission === 'function' ? await handle.queryPermission({ mode: 'readwrite' }) : 'granted';
+            if (perm !== 'granted' && typeof handle.requestPermission === 'function') {
+              perm = await handle.requestPermission({ mode: 'readwrite' });
+            }
+            if (perm !== 'granted') handle = null;
+          } catch (e) {
+            handle = null;
+          }
+        }
+
+        if (!handle) {
+          handle = await window.showSaveFilePicker({
+            suggestedName: `lifeos_backup.json`,
+            types: [{
+              description: 'Kopia zapasowa LifeOS w Google Drive (JSON)',
+              accept: { 'application/json': ['.json'] }
+            }]
+          });
+          await saveStoredHandle(handle, 'gdrive_file');
+        }
+
         const writable = await handle.createWritable();
         await writable.write(jsonStr);
         await writable.close();
-        return { success: true, fileName: handle.name };
+        return { success: true, fileName: handle.name, autoSaved: !forcePicker };
       } catch (e) {
         if (e.name !== 'AbortError') console.error('Save to folder error', e);
         return { success: false, error: e.name === 'AbortError' ? 'Anulowano' : e.message };
       }
     } else {
       this.exportJSON();
-      return { success: true, fileName: `lifeos_backup_${todayISO()}.json` };
+      return { success: true, fileName: `lifeos_backup.json` };
     }
   }
 
-  async loadFromFolder() {
+  async loadFromFolder(forcePicker = false) {
     if ('showOpenFilePicker' in window) {
       try {
-        const [handle] = await window.showOpenFilePicker({
-          types: [{
-            description: 'Kopia zapasowa LifeOS (JSON)',
-            accept: { 'application/json': ['.json'] }
-          }],
-          multiple: false
-        });
+        let handle = forcePicker ? null : await getStoredHandle('gdrive_file');
+
+        if (handle) {
+          try {
+            let perm = typeof handle.queryPermission === 'function' ? await handle.queryPermission({ mode: 'read' }) : 'granted';
+            if (perm !== 'granted' && typeof handle.requestPermission === 'function') {
+              perm = await handle.requestPermission({ mode: 'read' });
+            }
+            if (perm !== 'granted') handle = null;
+          } catch (e) {
+            handle = null;
+          }
+        }
+
+        if (!handle) {
+          const [picked] = await window.showOpenFilePicker({
+            types: [{
+              description: 'Kopia zapasowa LifeOS w Google Drive (JSON)',
+              accept: { 'application/json': ['.json'] }
+            }],
+            multiple: false
+          });
+          handle = picked;
+          await saveStoredHandle(handle, 'gdrive_file');
+        }
+
         const file = await handle.getFile();
         const text = await file.text();
         const success = this.importJSON(text);
@@ -762,6 +841,11 @@ class Store {
       }
     }
     return { success: false };
+  }
+
+  async hasConfiguredFolderFile() {
+    const handle = await getStoredHandle('gdrive_file');
+    return Boolean(handle);
   }
 
   // ---- Reset ----

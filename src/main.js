@@ -272,21 +272,31 @@ function setupCloudSyncModal() {
 
   const folderSaveBtn = $('#cloud-folder-save-btn');
   const folderLoadBtn = $('#cloud-folder-load-btn');
+  const folderRelinkBtn = $('#cloud-folder-relink-btn');
 
   if (folderSaveBtn) {
     folderSaveBtn.addEventListener('click', async () => {
-      const res = await store.saveToFolder();
+      const res = await store.saveToFolder(false);
       if (res.success && res.fileName && res.fileName !== 'Anulowano') {
-        alert(`Pomyślnie zapisano plik kopii zapasowej w folderze: ${res.fileName}`);
+        alert(`✅ Pomyślnie zaktualizowano plik w Google Drive: ${res.fileName}`);
+      }
+    });
+  }
+
+  if (folderRelinkBtn) {
+    folderRelinkBtn.addEventListener('click', async () => {
+      const res = await store.saveToFolder(true);
+      if (res.success && res.fileName && res.fileName !== 'Anulowano') {
+        alert(`✅ Przypisano nowy plik Google Drive: ${res.fileName}`);
       }
     });
   }
 
   if (folderLoadBtn) {
     folderLoadBtn.addEventListener('click', async () => {
-      const res = await store.loadFromFolder();
+      const res = await store.loadFromFolder(false);
       if (res.success) {
-        alert(`Pomyślnie zaimportowano dane z pliku: ${res.fileName}`);
+        alert(`✅ Pomyślnie wczytano dane z pliku: ${res.fileName}`);
         const currentRoute = router.getCurrentRoute();
         const route = router._routes?.get(currentRoute);
         const viewContainer = $('#view-container');
