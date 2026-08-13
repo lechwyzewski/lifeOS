@@ -2,7 +2,7 @@
    LifeOS — Official Google Drive API v3 & GIS Service
    ============================================================ */
 
-const DEFAULT_CLIENT_ID = '942767098516-gdrive-lifeos.apps.googleusercontent.com';
+const DEFAULT_CLIENT_ID = '397311140267-450t30ha78beblh9520h84oscrv0epi8.apps.googleusercontent.com';
 const FILE_NAME = 'lifeos_data.json';
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 
