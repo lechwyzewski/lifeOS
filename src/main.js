@@ -9,6 +9,7 @@ import './styles/views.css';
 
 import router from './core/router.js';
 import store from './core/store.js';
+import { gdriveService } from './core/gdrive.js';
 import { initSidebar } from './components/sidebar.js';
 import { $ } from './core/utils.js';
 
@@ -242,7 +243,14 @@ function setupCloudSyncModal() {
   const loadBtn = $('#cloud-load-btn');
   const statusEl = $('#cloud-sync-status');
 
-  if (!cloudSyncBtn || !modal) return;
+  const clientIdInput = $('#gdrive-client-id-input');
+
+  if (clientIdInput) {
+    clientIdInput.value = gdriveService.clientId || '';
+    clientIdInput.addEventListener('input', () => {
+      gdriveService.setClientId(clientIdInput.value.trim());
+    });
+  }
 
   cloudSyncBtn.addEventListener('click', () => {
     const config = store.getCloudSyncConfig();
