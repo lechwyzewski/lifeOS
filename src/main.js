@@ -270,6 +270,33 @@ function setupCloudSyncModal() {
     }
   });
 
+  const folderSaveBtn = $('#cloud-folder-save-btn');
+  const folderLoadBtn = $('#cloud-folder-load-btn');
+
+  if (folderSaveBtn) {
+    folderSaveBtn.addEventListener('click', async () => {
+      const res = await store.saveToFolder();
+      if (res.success && res.fileName && res.fileName !== 'Anulowano') {
+        alert(`Pomyślnie zapisano plik kopii zapasowej w folderze: ${res.fileName}`);
+      }
+    });
+  }
+
+  if (folderLoadBtn) {
+    folderLoadBtn.addEventListener('click', async () => {
+      const res = await store.loadFromFolder();
+      if (res.success) {
+        alert(`Pomyślnie zaimportowano dane z pliku: ${res.fileName}`);
+        const currentRoute = router.getCurrentRoute();
+        const route = router._routes?.get(currentRoute);
+        const viewContainer = $('#view-container');
+        if (route && viewContainer) {
+          route.render(viewContainer);
+        }
+      }
+    });
+  }
+
   if (genKeyBtn && keyInput) {
     genKeyBtn.addEventListener('click', () => {
       keyInput.value = 'lifeos-' + Math.random().toString(36).substring(2, 8);

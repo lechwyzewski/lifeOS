@@ -717,6 +717,53 @@ class Store {
     return false;
   }
 
+  async saveToFolder() {
+    const jsonStr = JSON.stringify(this._state, null, 2);
+    if ('showSaveFilePicker' in window) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: `lifeos_backup_${todayISO()}.json`,
+          types: [{
+            description: 'Kopia zapasowa LifeOS (JSON)',
+            accept: { 'application/json': ['.json'] }
+          }]
+        });
+        const writable = await handle.createWritable();
+        await writable.write(jsonStr);
+        await writable.close();
+        return { success: true, fileName: handle.name };
+      } catch (e) {
+        if (e.name !== 'AbortError') console.error('Save to folder error', e);
+        return { success: false, error: e.name === 'AbortError' ? 'Anulowano' : e.message };
+      }
+    } else {
+      this.exportJSON();
+      return { success: true, fileName: `lifeos_backup_${todayISO()}.json` };
+    }
+  }
+
+  async loadFromFolder() {
+    if ('showOpenFilePicker' in window) {
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          types: [{
+            description: 'Kopia zapasowa LifeOS (JSON)',
+            accept: { 'application/json': ['.json'] }
+          }],
+          multiple: false
+        });
+        const file = await handle.getFile();
+        const text = await file.text();
+        const success = this.importJSON(text);
+        return { success, fileName: file.name };
+      } catch (e) {
+        if (e.name !== 'AbortError') console.error('Load from folder error', e);
+        return { success: false };
+      }
+    }
+    return { success: false };
+  }
+
   // ---- Reset ----
   resetToDefaults() {
     this._state = getDefaultState();
